@@ -1,0 +1,10 @@
+{
+  "name": "rt-fn",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch --experimental-strip-types src/dev-server.ts",
+    "start": "node --experimental-strip-types src/dev-server.ts",
+    "verify": "node --test --experimental-strip-types test/*.test.ts"
+  }
+}
