@@ -3,9 +3,9 @@ import { pathToFileURL } from "node:url";
 
 import { loadAppConfig, type AppConfig } from "./config.ts";
 import {
-  buildSmokeFlowRealtimeState,
-  projectQuizChange,
-  recordParticipantSubmission,
+  describeHttpFunction,
+  firebaseHttpFunctions,
+  matchHttpFunction,
 } from "./index.ts";
 
 function jsonResponse(
@@ -22,47 +22,34 @@ function handleRequest(
   response: http.ServerResponse,
   config: AppConfig,
 ): void {
-  if (request.method === "GET" && request.url === "/health") {
+  if (request.method === "GET" && request.url === "/") {
     jsonResponse(response, 200, {
       environmentName: config.environmentName,
+      functions: firebaseHttpFunctions.map(describeHttpFunction),
+      runtime: "firebase-function-shell",
       service: "rt-fn",
       status: "ok",
-      upstream: config.backofficeBaseUrl,
+      upstream: {
+        backofficeBaseUrl: config.backofficeBaseUrl,
+      },
     });
     return;
   }
 
-  if (request.method === "GET" && request.url === "/bootstrap/smoke-flow") {
-    jsonResponse(response, 200, buildSmokeFlowRealtimeState(config.backofficeBaseUrl));
-    return;
-  }
-
-  if (request.method === "POST" && request.url === "/quiz-change") {
+  const matchedFunction = matchHttpFunction(request.method, request.url);
+  if (matchedFunction !== undefined) {
     jsonResponse(
       response,
-      202,
-      projectQuizChange({
-        quizId: "quiz-smoke-demo",
-        changeType: "configuration-update",
-      }),
+      matchedFunction.statusCode,
+      matchedFunction.respond(config, request),
     );
     return;
   }
 
-  if (request.method === "POST" && request.url === "/participant-submissions") {
-    jsonResponse(
-      response,
-      202,
-      recordParticipantSubmission({
-        quizId: "quiz-smoke-demo",
-        participantId: "participant-smoke-demo",
-        answerId: "answer-smoke-a",
-      }),
-    );
-    return;
-  }
-
-  jsonResponse(response, 404, { error: "Not Found" });
+  jsonResponse(response, 404, {
+    availableFunctions: firebaseHttpFunctions.map(describeHttpFunction),
+    error: "Not Found",
+  });
 }
 
 export function createServer(config: AppConfig): http.Server {
@@ -84,6 +71,6 @@ if (isEntrypoint) {
   const config = loadAppConfig();
   await startServer(config);
   console.log(
-    `rt-fn shell listening on http://localhost:${config.port} for ${config.environmentName}`,
+    `rt-fn firebase-aligned shell listening on http://localhost:${config.port} for ${config.environmentName}`,
   );
 }

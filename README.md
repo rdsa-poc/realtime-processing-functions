@@ -22,11 +22,20 @@ Realtime processing shell for participant submissions, realtime state updates, a
 ## Notes
 
 - The shell is intentionally dependency-free so the repo can boot immediately in a clean workspace.
-- The exported handlers model the future Firebase Functions boundary while the local server provides a simple development surface.
+- `src/index.ts` now exports Firebase-aligned HTTP function definitions, and the local shell mounts each function at `/<functionName>`.
+- The local shell keeps the original smoke-flow aliases so existing PoC callers can continue using `/bootstrap/smoke-flow`, `/quiz-change`, and `/participant-submissions`.
 - Startup fails fast with a message that lists any missing required `RADIOSA_*` values.
 
 ## Smoke Flow
 
-- `GET /bootstrap/smoke-flow` mirrors the bootstrap identifiers exposed by `bof-be`.
-- `POST /quiz-change` and `POST /participant-submissions` use the same scaffold smoke-flow identifiers.
+- `GET /` lists the mounted function names and their compatibility aliases.
+- `GET /bootstrapSmokeFlow` mirrors the bootstrap identifiers exposed by `bof-be`.
+- `POST /handleQuizChange` and `POST /handleParticipantSubmission` use the same scaffold smoke-flow identifiers.
+- Compatibility aliases remain available at `GET /bootstrap/smoke-flow`, `POST /quiz-change`, and `POST /participant-submissions`.
+- Manual verification path:
+  - `cp .env.example .env.local`
+  - `npm run dev`
+  - `curl http://localhost:5001/`
+  - `curl http://localhost:5001/bootstrapSmokeFlow`
+  - `curl -X POST http://localhost:5001/handleParticipantSubmission`
 - The full bootstrap and smoke-flow steps are documented in `../docs/baseline-smoke-flow.md`.
