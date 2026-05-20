@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { type AppConfig } from "../src/config.ts";
 import {
   MissingConfigurationError,
   parseEnvironmentFile,
@@ -9,6 +10,8 @@ import {
 } from "../src/config.ts";
 import {
   buildSmokeFlowRealtimeState,
+  firebaseHttpFunctions,
+  matchHttpFunction,
   projectQuizChange,
   recordParticipantSubmission,
 } from "../src/index.ts";
@@ -34,6 +37,15 @@ test("realtime functions scaffold exposes the expected handlers", () => {
   assert.equal(projected.accepted, true);
   assert.equal(recorded.analyticsSink, "bigquery");
   assert.equal(recorded.accepted, true);
+  assert.deepEqual(
+    firebaseHttpFunctions.map((definition) => definition.functionName),
+    [
+      "health",
+      "bootstrapSmokeFlow",
+      "handleQuizChange",
+      "handleParticipantSubmission",
+    ],
+  );
 });
 
 // Test: exposes the realtime-side bootstrap contract used by the scaffold smoke flow.
@@ -62,6 +74,8 @@ test("realtime functions scaffold declares startup commands", () => {
   assert.match(readme, /npm run dev/);
   assert.match(readme, /npm run start/);
   assert.match(readme, /http:\/\/localhost:5001/);
+  assert.match(readme, /curl/i);
+  assert.match(readme, /\/bootstrapSmokeFlow/);
 });
 
 // Test: resolves the shared local configuration convention from the committed example file.
@@ -93,5 +107,67 @@ test("realtime functions scaffold reports missing configuration keys", () => {
       );
       return true;
     },
+  );
+});
+
+// Test: resolves the Firebase-aligned function aliases used by the local shell.
+// Validates: RDS-AC-003, RDS-AC-011 (RDS-REQ-015 - Provide a runnable application skeleton for rt-fn, RDS-REQ-023 - Provide a minimal cross-application smoke flow)
+test("realtime functions scaffold resolves canonical and compatibility routes", () => {
+  assert.equal(matchHttpFunction("GET", "/bootstrapSmokeFlow")?.functionName, "bootstrapSmokeFlow");
+  assert.equal(
+    matchHttpFunction("GET", "/bootstrap/smoke-flow")?.functionName,
+    "bootstrapSmokeFlow",
+  );
+  assert.equal(matchHttpFunction("POST", "/handleQuizChange")?.functionName, "handleQuizChange");
+  assert.equal(
+    matchHttpFunction("POST", "/participant-submissions")?.functionName,
+    "handleParticipantSubmission",
+  );
+});
+
+// Test: serves the smoke-flow handlers through the local Firebase-aligned shell.
+// Validates: RDS-AC-003, RDS-AC-011, RDS-AC-012 (RDS-REQ-015 - Provide a runnable application skeleton for rt-fn, RDS-REQ-023 - Provide a minimal cross-application smoke flow, RDS-REQ-024 - Provide bootstrap data for the initial smoke flow)
+test("realtime functions scaffold serves stable smoke flow responses", () => {
+  const config: AppConfig = {
+    appId: "rt-fn",
+    backofficeBaseUrl: "http://localhost:8080",
+    environmentName: "local",
+    port: 0,
+  };
+
+  const bootstrapHandler = matchHttpFunction("GET", "/bootstrapSmokeFlow");
+  const compatibilityHandler = matchHttpFunction("GET", "/bootstrap/smoke-flow");
+  const quizChangeHandler = matchHttpFunction("POST", "/handleQuizChange");
+  const participantSubmissionHandler = matchHttpFunction(
+    "POST",
+    "/participant-submissions",
+  );
+
+  assert.ok(bootstrapHandler !== undefined);
+  assert.ok(compatibilityHandler !== undefined);
+  assert.ok(quizChangeHandler !== undefined);
+  assert.ok(participantSubmissionHandler !== undefined);
+
+  const bootstrapResponse = bootstrapHandler.respond(config, {} as never);
+  const compatibilityResponse = compatibilityHandler.respond(config, {} as never);
+  const quizChangeResponse = quizChangeHandler.respond(config, {} as never);
+  const participantSubmissionResponse = participantSubmissionHandler.respond(
+    config,
+    {} as never,
+  );
+
+  assert.equal(bootstrapHandler.statusCode, 200);
+  assert.deepEqual(bootstrapResponse, compatibilityResponse);
+  assert.equal((bootstrapResponse as { smokeFlowId: string }).smokeFlowId, "baseline-smoke-flow");
+  assert.equal(
+    (bootstrapResponse as { upstreamBackofficeUrl: string }).upstreamBackofficeUrl,
+    "http://localhost:8080",
+  );
+  assert.equal(quizChangeHandler.statusCode, 202);
+  assert.equal((quizChangeResponse as { target: string }).target, "realtime-quiz-data");
+  assert.equal(participantSubmissionHandler.statusCode, 202);
+  assert.equal(
+    (participantSubmissionResponse as { analyticsSink: string }).analyticsSink,
+    "bigquery",
   );
 });
