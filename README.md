@@ -15,9 +15,12 @@ Minimal Firebase-aligned local shell for the `rt-fn` baseline application event 
 - `RT_FN_BASE_URL` is the shared discovery value the mobile app uses to locate the local `rt-fn` shell at `http://localhost:5001`.
 - `RADIOSA_APP_ID` is optional for `rt-fn`; the shell defaults it to the repo identifier when omitted from the shared root contract.
 - `RADIOSA_PORT` is optional and overrides the local functions port when needed.
+- `RADIOSA_BIND_HOST` is optional and controls which local interface the shell binds to. Leave it unset for `127.0.0.1`, or set it to `0.0.0.0` for phone/emulator access.
 - `npm run dev` starts the local functions shell on `http://localhost:5001`
 - `npm run start` starts the local functions shell without file watching
 - `npm run verify` runs the scaffold checks for this repository
+
+For the full local stack bootstrap from the workspace root, use `../scripts/start-local-stack.sh`.
 
 ## Notes
 
