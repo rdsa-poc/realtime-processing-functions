@@ -1,12 +1,12 @@
 import http from "node:http";
 import { pathToFileURL } from "node:url";
 
-import { loadAppConfig, type AppConfig } from "./config.ts";
+import { loadAppConfig, type AppConfig } from "./shared/config.ts";
 import {
+  createApplicationEventHandler,
   describeHttpFunction,
-  firebaseHttpFunctions,
   matchHttpFunction,
-} from "./index.ts";
+} from "./functions/onApplicationEvent.ts";
 
 function jsonResponse(
   response: http.ServerResponse,
@@ -21,39 +21,45 @@ function handleRequest(
   request: http.IncomingMessage,
   response: http.ServerResponse,
   config: AppConfig,
-): void {
+): Promise<void> | void {
   if (request.method === "GET" && request.url === "/") {
+    const applicationEventHandler = createApplicationEventHandler();
     jsonResponse(response, 200, {
       environmentName: config.environmentName,
-      functions: firebaseHttpFunctions.map(describeHttpFunction),
+      functions: [describeHttpFunction(applicationEventHandler)],
       runtime: "firebase-function-shell",
       service: "rt-fn",
       status: "ok",
-      upstream: {
-        backofficeBaseUrl: config.backofficeBaseUrl,
-      },
     });
     return;
   }
 
   const matchedFunction = matchHttpFunction(request.method, request.url);
   if (matchedFunction !== undefined) {
-    jsonResponse(
-      response,
-      matchedFunction.statusCode,
-      matchedFunction.respond(config, request),
-    );
-    return;
+    return readJsonBody(request)
+      .then((payload) => matchedFunction.respond(payload))
+      .then((payload) => {
+        jsonResponse(response, 202, payload);
+      })
+      .catch((error: unknown) => {
+        jsonResponse(response, 400, {
+          error: "Invalid JSON payload",
+          message: error instanceof Error ? error.message : String(error),
+        });
+      });
   }
 
+  const applicationEventHandler = createApplicationEventHandler();
   jsonResponse(response, 404, {
-    availableFunctions: firebaseHttpFunctions.map(describeHttpFunction),
+    availableFunctions: [describeHttpFunction(applicationEventHandler)],
     error: "Not Found",
   });
 }
 
 export function createServer(config: AppConfig): http.Server {
-  return http.createServer((request, response) => handleRequest(request, response, config));
+  return http.createServer((request, response) => {
+    void handleRequest(request, response, config);
+  });
 }
 
 export function startServer(config: AppConfig): Promise<http.Server> {
@@ -73,4 +79,28 @@ if (isEntrypoint) {
   console.log(
     `rt-fn firebase-aligned shell listening on http://localhost:${config.port} for ${config.environmentName}`,
   );
+}
+
+function readJsonBody(request: http.IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const chunks: Uint8Array[] = [];
+
+    request.on("data", (chunk) => {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    });
+    request.on("end", () => {
+      const rawBody = Buffer.concat(chunks).toString("utf8").trim();
+      if (rawBody === "") {
+        resolve({});
+        return;
+      }
+
+      try {
+        resolve(JSON.parse(rawBody));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    request.on("error", reject);
+  });
 }
