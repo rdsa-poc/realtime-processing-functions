@@ -1,19 +1,15 @@
 import { existsSync, readFileSync } from "node:fs";
 
-const ENVIRONMENT_FILE_URL = new URL("../.env.local", import.meta.url);
+const ENVIRONMENT_FILE_URL = new URL("../../../.env", import.meta.url);
 const DEFAULT_PORT = 5001;
-const REQUIRED_KEYS = [
-  "RADIOSA_ENVIRONMENT",
-  "RADIOSA_APP_ID",
-  "RADIOSA_BACKOFFICE_BASE_URL",
-] as const;
+const DEFAULT_APP_ID = "rt-fn";
+const REQUIRED_KEYS = ["RADIOSA_ENVIRONMENT"] as const;
 
 type RequiredKey = (typeof REQUIRED_KEYS)[number];
 type EnvironmentSource = Record<string, string | undefined>;
 
 export type AppConfig = {
   appId: string;
-  backofficeBaseUrl: string;
   environmentName: string;
   port: number;
 };
@@ -77,8 +73,7 @@ export function resolveAppConfig(environment: EnvironmentSource = process.env): 
   const configuredPort = Number(environment.RADIOSA_PORT ?? environment.PORT ?? DEFAULT_PORT);
 
   return {
-    appId: readRequiredValue(environment, "RADIOSA_APP_ID")!,
-    backofficeBaseUrl: readRequiredValue(environment, "RADIOSA_BACKOFFICE_BASE_URL")!,
+    appId: readOptionalValue(environment, "RADIOSA_APP_ID") ?? DEFAULT_APP_ID,
     environmentName: readRequiredValue(environment, "RADIOSA_ENVIRONMENT")!,
     port: Number.isFinite(configuredPort) ? configuredPort : DEFAULT_PORT,
   };
@@ -103,6 +98,13 @@ function normalizeEnvironmentValue(value: string): string {
 function readRequiredValue(
   environment: EnvironmentSource,
   key: RequiredKey,
+): string | undefined {
+  return readOptionalValue(environment, key);
+}
+
+function readOptionalValue(
+  environment: EnvironmentSource,
+  key: string,
 ): string | undefined {
   const value = environment[key]?.trim();
   return value === "" ? undefined : value;
