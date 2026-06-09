@@ -65,7 +65,7 @@ export function createServer(config: AppConfig): http.Server {
 export function startServer(config: AppConfig): Promise<http.Server> {
   const server = createServer(config);
   return new Promise((resolve) => {
-    server.listen(config.port, () => resolve(server));
+    server.listen(config.port, config.host, () => resolve(server));
   });
 }
 
@@ -77,7 +77,7 @@ if (isEntrypoint) {
   const config = loadAppConfig();
   await startServer(config);
   console.log(
-    `rt-fn firebase-aligned shell listening on http://localhost:${config.port} for ${config.environmentName}`,
+    `rt-fn firebase-aligned shell listening on http://${config.host}:${config.port} for ${config.environmentName}`,
   );
 }
 

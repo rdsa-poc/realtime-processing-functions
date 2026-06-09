@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 
 const ENVIRONMENT_FILE_URL = new URL("../../../.env", import.meta.url);
+const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 5001;
 const DEFAULT_APP_ID = "rt-fn";
 const REQUIRED_KEYS = ["RADIOSA_ENVIRONMENT"] as const;
@@ -11,6 +12,7 @@ type EnvironmentSource = Record<string, string | undefined>;
 export type AppConfig = {
   appId: string;
   environmentName: string;
+  host: string;
   port: number;
 };
 
@@ -75,6 +77,7 @@ export function resolveAppConfig(environment: EnvironmentSource = process.env): 
   return {
     appId: readOptionalValue(environment, "RADIOSA_APP_ID") ?? DEFAULT_APP_ID,
     environmentName: readRequiredValue(environment, "RADIOSA_ENVIRONMENT")!,
+    host: readOptionalValue(environment, "RADIOSA_BIND_HOST") ?? DEFAULT_HOST,
     port: Number.isFinite(configuredPort) ? configuredPort : DEFAULT_PORT,
   };
 }
